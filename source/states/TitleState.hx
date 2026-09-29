@@ -41,6 +41,10 @@ class TitleState extends MusicBeatState
 	public static var volumeDownKeys:Array<FlxKey> = [FlxKey.NUMPADMINUS, FlxKey.MINUS];
 	public static var volumeUpKeys:Array<FlxKey> = [FlxKey.NUMPADPLUS, FlxKey.PLUS];
 
+	// Configuração da transição Title <-> MainMenu
+	public static var fromMainMenu:Bool = false;
+	public static var transitionDuration:Float = 0.8;
+
 	public static var initialized:Bool = false;
 
 	var credGroup:FlxGroup = new FlxGroup();
@@ -207,6 +211,25 @@ class TitleState extends MusicBeatState
 			skipIntro();
 		else
 			initialized = true;
+
+		if (fromMainMenu)
+		{
+			fromMainMenu = false;
+			transitioning = true;
+
+			var camHeight:Float = FlxG.camera.height / Math.max(FlxG.camera.zoom, 0.001);
+			var moveDistance:Float = camHeight + 50;
+
+			FlxG.camera.y = -moveDistance;
+
+			FlxTween.tween(FlxG.camera, {y: 0}, transitionDuration, {
+				ease: FlxEase.cubeOut,
+				onComplete: function(twn:FlxTween)
+				{
+					transitioning = false;
+				}
+			});
+		}
 
 		// credGroup.add(credTextShit);
 	}
@@ -379,18 +402,24 @@ class TitleState extends MusicBeatState
 				
 				if(titleText != null) titleText.animation.play('press');
 
-				FlxG.camera.flash(ClientPrefs.data.flashing ? FlxColor.WHITE : 0x4CFFFFFF, 1);
 				FlxG.sound.play(Paths.sound('confirmMenu'), 0.7);
 
 				transitioning = true;
-				// FlxG.sound.music.stop();
 
-				new FlxTimer().start(1, function(tmr:FlxTimer)
-				{
-					MusicBeatState.switchState(new MainMenuState());
-					closedState = true;
+				var camHeight:Float = FlxG.camera.height / Math.max(FlxG.camera.zoom, 0.001);
+				var moveDistance:Float = camHeight + 50;
+
+				FlxTween.tween(FlxG.camera, {y: -moveDistance}, transitionDuration, {
+					ease: FlxEase.cubeIn,
+					onComplete: function(twn:FlxTween)
+					{
+						FlxTransitionableState.skipNextTransIn = true;
+						FlxTransitionableState.skipNextTransOut = true;
+						MainMenuState.fromTitle = true;
+						MusicBeatState.switchState(new MainMenuState());
+						closedState = true;
+					}
 				});
-				// FlxG.sound.play(Paths.music('titleShoot'), 0.7);
 			}
 			#if TITLE_SCREEN_EASTER_EGG
 			else if (FlxG.keys.firstJustPressed() != FlxKey.NONE)
@@ -627,7 +656,7 @@ class TitleState extends MusicBeatState
 			{
 				remove(ngSpr);
 				remove(credGroup);
-				FlxG.camera.flash(FlxColor.WHITE, 4);
+				if (!fromMainMenu) FlxG.camera.flash(FlxColor.WHITE, 4);
 
 				var easteregg:String = FlxG.save.data.psychDevsEasterEgg;
 				if (easteregg == null) easteregg = '';
