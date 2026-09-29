@@ -1,0 +1,13 @@
+{	
+	"titlex": -150,
+	"titley": -100,
+	"startx": 100,
+	"starty": 576,
+	"gfx": 225,
+	"gfy": 50,
+	"backgroundSprite": "",
+	"bpm": 102,
+	
+	"animation": "BF_title idle",
+	"idle": true
+}
