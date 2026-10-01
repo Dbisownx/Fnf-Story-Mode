@@ -7,6 +7,8 @@ import flixel.graphics.frames.FlxAtlasFrames;
 import flixel.graphics.frames.FlxFrame;
 import flixel.group.FlxGroup;
 import flixel.input.gamepad.FlxGamepad;
+import flixel.util.FlxAxes;
+import flixel.addons.display.FlxBackdrop;
 import haxe.Json;
 
 import openfl.Assets;
@@ -55,6 +57,9 @@ class TitleState extends MusicBeatState
 	
 	var titleTextColors:Array<FlxColor> = [0xFF33FFFF, 0xFF3333CC];
 	var titleTextAlphas:Array<Float> = [1, .64];
+	
+	var camZoomBump:Float = 0.02;
+	var camZoomDecay:Float = 1;
 
 	var curWacky:Array<String> = [];
 
@@ -120,6 +125,7 @@ class TitleState extends MusicBeatState
 	var danceLeft:Bool = false;
 	var titleText:FlxSprite;
 	var swagShader:ColorSwap = null;
+	var nuvens:FlxSprite;
 
 	function startIntro()
 	{
@@ -201,7 +207,50 @@ class TitleState extends MusicBeatState
 		ngSpr.screenCenter(X);
 		ngSpr.antialiasing = ClientPrefs.data.antialiasing;
 
+		var designScale:Float = FlxG.width / 1920; // se seu jogo for 1280x720, isso dá ~0.667
+
+		function addBGLayer(image:String, scrollY:Float, extendDown:Bool = false):FlxSprite
+		{
+    		var layer:FlxSprite = new FlxSprite().loadGraphic(Paths.image(image));
+    		layer.antialiasing = ClientPrefs.data.antialiasing;
+    		layer.scrollFactor.set(0, scrollY);
+    		layer.setGraphicSize(Std.int(layer.width * designScale));
+    		layer.updateHitbox();
+    		add(layer);
+			return layer;
+		}
+
+
+		// ordem de trás pra frente — cada peso é a "distância" da câmera
+		addBGLayer('ceu', 0.05);
+
+		nuvens = new FlxSprite().loadGraphic(Paths.image('nuvens'));
+		nuvens.antialiasing = ClientPrefs.data.antialiasing;
+		nuvens.scrollFactor.set(0, 0.08);
+		nuvens.setGraphicSize(Std.int(nuvens.width * designScale));
+		nuvens.updateHitbox();
+		add(nuvens);
+
+		addBGLayer('predios_fundo', 0.2);
+		addBGLayer('predios_meio', 0.4);
+		addBGLayer('predios_frente', 0.6);
+		var chao:FlxSprite = new FlxSprite().loadGraphic(Paths.image('chao'));
+		chao.antialiasing = ClientPrefs.data.antialiasing;
+		chao.scrollFactor.set(0, 0.9);
+		chao.setGraphicSize(Std.int(chao.width * designScale));
+		chao.updateHitbox();
+
+		var pretoChao:FlxSprite = new FlxSprite(0, chao.height - 2);
+		pretoChao.makeGraphic(FlxG.width, FlxG.height, FlxColor.BLACK);
+		pretoChao.scrollFactor.set(0, 0.9);
+
+		add(pretoChao);
+		add(chao);
+
+		gfDance.setGraphicSize(Std.int(gfDance.width * 0.6)); // 0.9 = 90% do tamanho, ajusta esse valor até ficar bom
+		gfDance.updateHitbox();
 		add(gfDance);
+		addBGLayer('coisas', 1.1); // >1 = "mais perto" que o normal, se move até mais rápido que a câmera
 		//add(logoBl); //FNF Logo
 		add(titleText); //"Press Enter to Begin" text
 		add(credGroup);
@@ -220,9 +269,9 @@ class TitleState extends MusicBeatState
 			var camHeight:Float = FlxG.camera.height / Math.max(FlxG.camera.zoom, 0.001);
 			var moveDistance:Float = camHeight + 50;
 
-			FlxG.camera.y = -moveDistance;
+			FlxG.camera.scroll.y = moveDistance;
 
-			FlxTween.tween(FlxG.camera, {y: 0}, transitionDuration, {
+			FlxTween.tween(FlxG.camera.scroll, {y: 0}, transitionDuration, {
 				ease: FlxEase.cubeOut,
 				onComplete: function(twn:FlxTween)
 				{
@@ -345,6 +394,14 @@ class TitleState extends MusicBeatState
 
 	override function update(elapsed:Float)
 	{
+		FlxG.camera.zoom = FlxMath.lerp(1, FlxG.camera.zoom, Math.exp(-elapsed * 3.125 * camZoomDecay));
+
+		if (nuvens != null)
+		{
+    		nuvens.x -= 10 * elapsed; // 10 = velocidade em pixels/segundo pra esquerda
+    		if (nuvens.x <= -nuvens.width)
+        		nuvens.x = FlxG.width;
+		}
 		if (FlxG.sound.music != null)
 			Conductor.songPosition = FlxG.sound.music.time;
 		// FlxG.watch.addQuick('amp', FlxG.sound.music.amplitude);
@@ -409,7 +466,7 @@ class TitleState extends MusicBeatState
 				var camHeight:Float = FlxG.camera.height / Math.max(FlxG.camera.zoom, 0.001);
 				var moveDistance:Float = camHeight + 50;
 
-				FlxTween.tween(FlxG.camera, {y: -moveDistance}, transitionDuration, {
+				FlxTween.tween(FlxG.camera.scroll, {y: moveDistance}, transitionDuration, {
 					ease: FlxEase.cubeIn,
 					onComplete: function(twn:FlxTween)
 					{
@@ -528,10 +585,27 @@ class TitleState extends MusicBeatState
 	public static var closedState:Bool = false;
 	override function beatHit()
 	{
-		super.beatHit();
+    	super.beatHit();
 
-		if(logoBl != null)
-			logoBl.animation.play('bump', true);
+ 		if (curBeat % 4 == 0)
+		{
+    		if (gfDance != null)
+    		{
+        		danceLeft = !danceLeft;
+        		if (!useIdle)
+            	gfDance.animation.play(danceLeft ? 'danceRight' : 'danceLeft');
+        		else
+            	gfDance.animation.play('idle', true);
+    		}
+
+    	new FlxTimer().start(7 / 24, function(tmr:FlxTimer)
+    	{
+        FlxG.camera.zoom += camZoomBump;
+    	});
+	}
+
+    if(logoBl != null)
+     logoBl.animation.play('bump', true);
 
 		if(gfDance != null)
 		{
